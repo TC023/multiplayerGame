@@ -2,13 +2,10 @@ import pygame
 from pygame.locals import *
 from OpenGL.GL import *
 from OpenGL.GLU import *
-
 from Player import Player
 from random import randint
+import asyncio
 import requests
-import sys
-sys.path.append('..')
-
 
 screen_width, screen_height = 900, 900
 
@@ -16,6 +13,7 @@ textures = []
 
 filenames = ["./img/floor.png", "./img/grass.png", "./img/wall.png", "./img/creeper.png"]
 
+# Your Player class and texture-loading function remain unchanged
 jugador = Player()
 
 def Texturas(filepath):
@@ -132,57 +130,66 @@ def display():
     piso()
     cubo(0, 0, 0)
     jugador.update()
-    
-    response = requests.get(f"{url}/send-data")
-    
-    if response.status_code == 200:
-        response2 = response.json()
-        # print("Datos de jugadores:", response.json())
-        for player_id, player_data in response2["Players"].items():
-            # print(f"Player ID: {player_id}, Position: {player_data['pos']}")    
-            if player_id != id:
-                # print(player_data["pos"], type(player_data["pos"]))
-                cubo(*player_data["pos"])
-    else:
-        print("Failed to retrieve data:", response.text)
-    
-
-    
     pygame.display.flip()
 
+async def fetch_player_data(session, url):
+    """Fetch data from the server asynchronously."""
+    try:
+        async with session.get(f"{url}/send-data") as response:
+            if response.status == 200:
+                return await response.json()
+            print("Failed to retrieve data:", await response.text())
+    except Exception as e:
+        print(f"Error fetching player data: {e}")
+    return None
 
-pygame.init()
-init()
+async def send_player_data(session, url, data):
+    """Send player data to the server asynchronously."""
+    try:
+        async with session.post(f"{url}/receive", json=data) as response:
+            if response.status != 200:
+                print("Failed to send data:", await response.text())
+    except Exception as e:
+        print(f"Error sending player data: {e}")
 
-done = False
-clock = pygame.time.Clock()
+async def game_loop():
+    """Main game loop with asynchronous networking."""
+    pygame.init()
+    init()
+    done = False
+    clock = pygame.time.Clock()
+    player_id = str(randint(0, 1_000))
+    print(player_id)
+    url = "https://7090f242-2f4d-4065-aa86-75bccd3b116b-00-e4x2ntccemiq.janeway.replit.dev"
 
-id = str(randint(0,1_000))
-print(id)
-url = "https://7090f242-2f4d-4065-aa86-75bccd3b116b-00-e4x2ntccemiq.janeway.replit.dev"
+    while not done:
+        # Render and update game
+        display()
+        player_data = {"id": player_id, "pos": jugador.Position}
+        # await send_player_data(session, url, player_data)
+        await asyncio.get_event_loop().run_in_executor(None, requests.get, f"{url}/recieve")
 
+        # server_data = await fetch_player_data(session, url)
+        # if server_data:
+        #     for other_id, other_player in server_data["Players"].items():
+        #         if other_id != player_id:
+        #             cubo(*other_player["pos"])
 
-while not done:
-    display()
-    yoSendThis = {
-        "id": id,
-        "pos": jugador.Position
-    }
-    requests.post(f"{url}/receive", json=yoSendThis)
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                done = True
 
+        # Camera view
+        verX = jugador.Position[0] + jugador.newDir[0]
+        verZ = jugador.Position[2] + jugador.newDir[2]
+        if not jugador.especial:
+            glLoadIdentity()
+            gluLookAt(jugador.Position[0], jugador.Position[1], jugador.Position[2], 
+                        verX, jugador.Position[1], verZ, 0, 1, 0)
 
-    
-    for event in pygame.event.get():
-        if event.type == pygame.QUIT:
-            done = True
-            
-    verX = jugador.Position[0] + jugador.newDir[0]
-    verZ = jugador.Position[2] + jugador.newDir[2]
-    if not jugador.especial:
-        glLoadIdentity()
-        gluLookAt(jugador.Position[0], jugador.Position[1], jugador.Position[2], verX, jugador.Position[1], verZ, 0, 1, 0)
+        clock.tick(60)  # 60 FPS
 
+    pygame.quit()
 
-    clock.tick(60)  # 60 FPS
-
-pygame.quit()
+if __name__ == "__main__":
+    asyncio.run(game_loop())
