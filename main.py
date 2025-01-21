@@ -8,7 +8,7 @@ import asyncio
 import requests
 import aiohttp
 
-screen_width, screen_height = 790, 790
+screen_width, screen_height = 750, 750
 
 textures = []
 
@@ -132,7 +132,12 @@ def display():
     piso()
     cubo(0, 0, 0)
     jugador.update()
-    print(serverData)
+    # print(serverData)
+    for server_player_id, player_data in serverData["Players"].items():
+        # print(f"Player ID: {player_id}, Position: {player_data['pos']}")    
+        if server_player_id != player_id:
+            # print(player_data["pos"], type(player_data["pos"]))
+            cubo(*player_data["pos"])
     pygame.display.flip()
 
 serverData = {
@@ -178,7 +183,7 @@ async def periodic_update(url):
         
         await fetch_player_data(url)
         
-        await asyncio.sleep(0.1)
+        await asyncio.sleep(0)
 
 url = "https://7090f242-2f4d-4065-aa86-75bccd3b116b-00-e4x2ntccemiq.janeway.replit.dev"
 pygame.init()
