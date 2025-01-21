@@ -154,10 +154,10 @@ async def send_player_data(url):
             "id": player_id,
             "pos": jugador.Position
         }
-        await asyncio.get_event_loop().run_in_executor(None, requests.post, f"{url}/receive",yoSendThis) 
-        # async with aiohttp.ClientSession() as session:
-        #     async with session.post(f"{url}/receive", json=yoSendThis) as response:
-        #         return await response.text()
+        # await asyncio.get_event_loop().run_in_executor(None, requests.post, f"{url}/receive",yoSendThis) 
+        async with aiohttp.ClientSession() as session:
+            async with session.post(f"{url}/receive", json=yoSendThis) as response:
+                return await response.text()
         # print(lol.json())
 
     except Exception as e:
