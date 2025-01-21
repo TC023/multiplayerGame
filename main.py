@@ -126,20 +126,26 @@ def piso():
     glDisable(GL_TEXTURE_2D)
 
 def display():
+    global serverData
     """Render all objects."""
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     piso()
     cubo(0, 0, 0)
     jugador.update()
+    print(serverData)
     pygame.display.flip()
 
-async def fetch_player_data(session, url):
-    """Fetch data from the server asynchronously."""
+serverData = {
+    "Players": {
+    }
+}
+
+async def fetch_player_data(url):
+    global serverData
     try:
-        async with session.get(f"{url}/send-data") as response:
-            if response.status == 200:
-                return await response.json()
-            print("Failed to retrieve data:", await response.text())
+        serverData = (await asyncio.get_event_loop().run_in_executor(None, requests.get, f"{url}/send-data") ).json()
+        # print("updated with",serverData)
+        
     except Exception as e:
         print(f"Error fetching player data: {e}")
     return None
@@ -151,10 +157,11 @@ async def send_player_data(url):
     """Send player data to the server asynchronously."""
     try:
         yoSendThis = {
-            "id": player_id,
-            "pos": jugador.Position
+            "Update":{
+                "id": player_id,
+                "pos": jugador.Position
+                }
         }
-        # await asyncio.get_event_loop().run_in_executor(None, requests.post, f"{url}/receive",yoSendThis) 
         async with aiohttp.ClientSession() as session:
             async with session.post(f"{url}/receive", json=yoSendThis) as response:
                 return await response.text()
@@ -164,10 +171,12 @@ async def send_player_data(url):
         print(f"Error sending player data: {e}")
 
 async def periodic_update(url):
-    # print("periodic")
+    print("periodic")
     while True:
         response = await send_player_data(url)
         # print(response)
+        
+        await fetch_player_data(url)
         
         await asyncio.sleep(0.1)
 
@@ -208,6 +217,13 @@ async def game_loop():
         await asyncio.sleep(0)
         clock.tick(60)  # 60 FPS
 
+    # global serverData
+    print("deleting",serverData["Players"][player_id])
+    # del serverData["Players"][player_id]
+    print(serverData, type(serverData))
+    print(requests.post(f"{url}/receive", json={"deletePetition": player_id}).text)
     pygame.quit()
+
+
 
 asyncio.run(game_loop())
