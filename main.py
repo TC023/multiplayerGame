@@ -6,8 +6,9 @@ from Player import Player
 from random import randint
 import asyncio
 import requests
+import aiohttp
 
-screen_width, screen_height = 900, 900
+screen_width, screen_height = 790, 790
 
 textures = []
 
@@ -143,31 +144,48 @@ async def fetch_player_data(session, url):
         print(f"Error fetching player data: {e}")
     return None
 
-async def send_player_data(session, url, data):
+
+player_id = str(randint(0, 1_000))
+
+async def send_player_data(url):
     """Send player data to the server asynchronously."""
     try:
-        async with session.post(f"{url}/receive", json=data) as response:
-            if response.status != 200:
-                print("Failed to send data:", await response.text())
+        yoSendThis = {
+            "id": player_id,
+            "pos": jugador.Position
+        }
+        await asyncio.get_event_loop().run_in_executor(None, requests.post, f"{url}/receive",yoSendThis) 
+        # async with aiohttp.ClientSession() as session:
+        #     async with session.post(f"{url}/receive", json=yoSendThis) as response:
+        #         return await response.text()
+        # print(lol.json())
+
     except Exception as e:
         print(f"Error sending player data: {e}")
 
+async def periodic_send(url):
+    # print("periodic")
+    while True:
+        response = await send_player_data(url)
+        # print(response)
+        
+        await asyncio.sleep(0.1)
+
+url = "https://7090f242-2f4d-4065-aa86-75bccd3b116b-00-e4x2ntccemiq.janeway.replit.dev"
+pygame.init()
+init()
+
 async def game_loop():
     """Main game loop with asynchronous networking."""
-    pygame.init()
-    init()
+    asyncio.create_task(periodic_send(url))
     done = False
     clock = pygame.time.Clock()
-    player_id = str(randint(0, 1_000))
-    print(player_id)
-    url = "https://7090f242-2f4d-4065-aa86-75bccd3b116b-00-e4x2ntccemiq.janeway.replit.dev"
 
     while not done:
         # Render and update game
         display()
-        player_data = {"id": player_id, "pos": jugador.Position}
         # await send_player_data(session, url, player_data)
-        await asyncio.get_event_loop().run_in_executor(None, requests.get, f"{url}/recieve")
+        # await asyncio.get_event_loop().run_in_executor(None, requests.get, f"{url}/recieve")
 
         # server_data = await fetch_player_data(session, url)
         # if server_data:
@@ -187,9 +205,9 @@ async def game_loop():
             gluLookAt(jugador.Position[0], jugador.Position[1], jugador.Position[2], 
                         verX, jugador.Position[1], verZ, 0, 1, 0)
 
+        await asyncio.sleep(0)
         clock.tick(60)  # 60 FPS
 
     pygame.quit()
 
-if __name__ == "__main__":
-    asyncio.run(game_loop())
+asyncio.run(game_loop())
