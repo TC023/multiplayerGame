@@ -163,7 +163,7 @@ async def send_player_data(url):
     except Exception as e:
         print(f"Error sending player data: {e}")
 
-async def periodic_send(url):
+async def periodic_update(url):
     # print("periodic")
     while True:
         response = await send_player_data(url)
@@ -177,7 +177,7 @@ init()
 
 async def game_loop():
     """Main game loop with asynchronous networking."""
-    asyncio.create_task(periodic_send(url))
+    asyncio.create_task(periodic_update(url))
     done = False
     clock = pygame.time.Clock()
 
