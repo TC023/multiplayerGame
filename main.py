@@ -125,88 +125,95 @@ def piso():
     glEnd()
     glDisable(GL_TEXTURE_2D)
 
+serverData = {
+    "players": {}  # Use lowercase "players" to match WebSocket updates
+}
+
+async def websocket_listener(url):
+    async with aiohttp.ClientSession() as session:
+        async with session.ws_connect(f"{url}/ws") as ws:
+            async for msg in ws:
+                if msg.type == aiohttp.WSMsgType.TEXT:
+                    global serverData
+                    print(serverData)
+                    serverData = msg.json()
+
+async def send_updates(url):
+    async with aiohttp.ClientSession() as session:
+        async with session.ws_connect(f"{url}/ws") as ws:
+            while True:
+                await ws.send_json({
+                    "update": {
+                        "id": player_id,
+                        "pos": jugador.Position
+                    }
+                })
+                await asyncio.sleep(0.05)  # 20 updates/sec
+
+import time
+player_states = {}  # Track player positions and timestamps
+
+def interpolate_position(player_id, new_pos):
+    now = time.time()
+    if player_id not in player_states:
+        player_states[player_id] = {
+            "pos": new_pos,
+            "timestamp": now
+        }
+        return new_pos
+    
+    old_state = player_states[player_id]
+    elapsed = now - old_state["timestamp"]
+    
+    # Linear interpolation (adjust factor based on your tick rate)
+    interpolated = [
+        old + (new - old) * min(elapsed * 20, 1.0)  # 20 updates/sec
+        for old, new in zip(old_state["pos"], new_pos)
+    ]
+    
+    player_states[player_id] = {
+        "pos": new_pos,
+        "timestamp": now
+    }
+    return interpolated
+
+
 def display():
     global serverData
-    """Render all objects."""
+
+    
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
     piso()
     cubo(0, 0, 0)
     jugador.update()
     # print(serverData)
-    for server_player_id, player_data in serverData["Players"].items():
-        # print(f"Player ID: {player_id}, Position: {player_data['pos']}")    
+    
+    for server_player_id, player_data in serverData["players"].items():
         if server_player_id != player_id:
-            # print(player_data["pos"], type(player_data["pos"]))
-            cubo(*player_data["pos"])
+            # Store previous position and timestamp for interpolation
+            current_pos = player_data["pos"]
+            # Render with interpolated position
+            interpolated_pos = interpolate_position(server_player_id, current_pos)
+            cubo(*interpolated_pos)
     pygame.display.flip()
-
-serverData = {
-    "Players": {
-    }
-}
-
-async def fetch_player_data(url):
-    global serverData
-    try:
-        serverData = (await asyncio.get_event_loop().run_in_executor(None, requests.get, f"{url}/send-data") ).json()
-        # print("updated with",serverData)
-        
-    except Exception as e:
-        print(f"Error fetching player data: {e}")
-    return None
-
 
 player_id = str(randint(0, 1_000))
 
-async def send_player_data(url):
-    """Send player data to the server asynchronously."""
-    try:
-        yoSendThis = {
-            "Update":{
-                "id": player_id,
-                "pos": jugador.Position
-                }
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(f"{url}/receive", json=yoSendThis) as response:
-                return await response.text()
-        # print(lol.json())
-
-    except Exception as e:
-        print(f"Error sending player data: {e}")
-
-async def periodic_update(url):
-    print("periodic")
-    while True:
-        response = await send_player_data(url)
-        # print(response)
-        
-        await fetch_player_data(url)
-        
-        await asyncio.sleep(0)
-
-url = "https://7090f242-2f4d-4065-aa86-75bccd3b116b-00-e4x2ntccemiq.janeway.replit.dev"
+url = "http://127.0.0.1:5000"
 pygame.init()
 init()
 
 async def game_loop():
     """Main game loop with asynchronous networking."""
-    asyncio.create_task(periodic_update(url))
+    # asyncio.create_task(periodic_update(url))
+    asyncio.create_task(websocket_listener(url))
+    asyncio.create_task(send_updates(url))
     done = False
     clock = pygame.time.Clock()
 
     while not done:
         # Render and update game
         display()
-        # await send_player_data(session, url, player_data)
-        # await asyncio.get_event_loop().run_in_executor(None, requests.get, f"{url}/recieve")
-
-        # server_data = await fetch_player_data(session, url)
-        # if server_data:
-        #     for other_id, other_player in server_data["Players"].items():
-        #         if other_id != player_id:
-        #             cubo(*other_player["pos"])
-
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 done = True
@@ -222,11 +229,6 @@ async def game_loop():
         await asyncio.sleep(0)
         clock.tick(60)  # 60 FPS
 
-    # global serverData
-    print("deleting",serverData["Players"][player_id])
-    # del serverData["Players"][player_id]
-    print(serverData, type(serverData))
-    print(requests.post(f"{url}/receive", json={"deletePetition": player_id}).text)
     pygame.quit()
 
 

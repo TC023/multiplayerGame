@@ -1,48 +1,40 @@
-from flask import Flask, request, jsonify, json
+# server.py
+from aiohttp import web, WSMsgType
 
-app = Flask(__name__)
+app = web.Application()
+players = {}  # Stores player positions
 
-# Default data
-default = {
-    "Players": {
-    }
-}
-print(default)
+async def websocket_handler(request):
+    ws = web.WebSocketResponse()
+    await ws.prepare(request)
+    player_id = None
 
-# Store the latest received data
-latest_data = None
+    try:
+        async for msg in ws:
+            if msg.type == WSMsgType.TEXT:
+                data = msg.json()
+                if "update" in data:
+                    # Update player position
+                    player_id = data["update"]["id"]
+                    players[player_id] = data["update"]["pos"]
+                    # Broadcast to all clients
+                    await ws.send_json({"players": players})
+                    print(players)
+                elif "delete" in data:
+                    del players[data["delete"]]
+    finally:
+        if player_id and player_id in players:
+            del players[player_id]
+        await ws.close()
+    return ws
 
+async def get_players(request):
+    return web.json_response({"players": players})
 
-# Endpoint to receive JSON data
-@app.route('/receive', methods=['POST'])
-def receive_data():
-    global latest_data
-    data = request.json  # Access JSON data
-    if data:
-        print(data)
-        if "Update" in data:
-            data = data["Update"]
-            default["Players"][data["id"]] = {"pos": data["pos"]}
-            latest_data = default  # Update global variable
-            return jsonify({"message": "Data received successfully!"}), 200
-        elif "deletePetition" in data:
-            data = data["deletePetition"]
-            del default["Players"][data]
-            latest_data = default  # Update global variable
-            return jsonify({"message": "Player deleted from server!"}), 200
-    return jsonify({"error": "No JSON data received"}), 400
+app.add_routes([
+    web.get("/ws", websocket_handler),
+    web.get("/players", get_players)
+    ])
 
-
-# Endpoint to send predefined data
-@app.route('/send-data', methods=['GET'])
-def send_data():
-    global latest_data
-    # Check if there's new data to send
-    if latest_data:
-        return jsonify(latest_data), 200
-    # Return default data if no new data has been received
-    return jsonify(default), 200
-
-
-if __name__ == '__main__':
-    app.run(host='0.0.0.0', port=5000, debug=True)
+if __name__ == "__main__":
+    web.run_app(app, host="0.0.0.0", port=5000)
